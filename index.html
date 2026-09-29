@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>คลังโค้ด</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#10242b">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{--ink:#10242b;--paper:#f2f5f1;--card:#fff;--line:#d3dcd7;--amber:#f2b632;--mut:#5b6b66;--red:#b3261e}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{font:16px/1.55 "Noto Sans Thai","Sarabun",system-ui,sans-serif;background:var(--paper);color:var(--ink);padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+main{max-width:640px;margin:0 auto;padding:16px}
+h1{font-size:1.7rem;line-height:1.25;margin:14px 0 4px}
+p{margin:6px 0 14px}
+.mut{color:var(--mut)}
+.empty{padding:18px;border:1.5px dashed var(--line);border-radius:12px;color:var(--mut)}
+.btn{min-height:46px;padding:0 18px;border:0;border-radius:10px;font:inherit;font-weight:600;background:var(--ink);color:#fff;cursor:pointer}
+.btn:disabled{opacity:.4}
+.go{background:var(--amber);color:var(--ink)}
+.ghost{background:transparent;border:1.5px solid var(--ink);color:var(--ink)}
+.danger{color:var(--red);border-color:var(--red)}
+.row{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0}
+.item{display:flex;width:100%;justify-content:space-between;align-items:center;min-height:56px;margin:0 0 10px;padding:0 16px;border:1.5px solid var(--line);border-radius:12px;background:var(--card);font:inherit;color:inherit;text-align:left}
+.item span{color:var(--mut);font-size:.9rem}
+select{width:100%;min-height:46px;margin:4px 0 12px;padding:0 10px;font:inherit;border:1.5px solid var(--line);border-radius:10px;background:var(--card)}
+ul{list-style:none;margin:0;padding:0}
+li{display:flex;align-items:center;gap:10px;min-height:48px;border-bottom:1px solid var(--line)}
+li span{flex:1;word-break:break-all}
+li small{color:var(--mut)}
+.x{min-height:40px;padding:0 12px;border:0;background:none;color:var(--red);font:inherit}
+.bar{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+#st{color:var(--mut);font-size:.9rem}
+#term{height:calc(100dvh - 190px);min-height:240px;margin:0;padding:12px;overflow:auto;border-radius:12px;background:var(--ink);color:#e8f1ee;font:13px/1.45 ui-monospace,"Noto Sans Mono","Noto Sans Thai",monospace;white-space:pre-wrap;word-break:break-word}
+#inrow{display:flex;gap:8px;margin-top:10px}
+#inrow[hidden]{display:none}
+#line{flex:1;min-width:0;min-height:46px;padding:0 12px;font:16px ui-monospace,monospace;border:2px solid var(--amber);border-radius:10px;background:var(--card);color:var(--ink)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const PYURL='https://cdn.jsdelivr.net/pyodide/v0.27.0/full/';
+const app=$('#app');
+let db=[];try{db=JSON.parse(localStorage.getItem('cv.projects')||'[]')}catch(e){}
+const save=()=>{try{localStorage.setItem('cv.projects',JSON.stringify(db))}catch(e){alert('พื้นที่เก็บเต็ม บันทึกไม่ได้')}};
+let cur=null,running=false;
+const P=()=>db.find(x=>x.id===cur);
+
+function home(){
+  cur=null;
+  app.innerHTML=`<h1>คลังโค้ด</h1><p class="mut">โปรเจค Python ของคุณ เก็บและรันได้ในเครื่องนี้</p>`+
+  (db.length?db.map(p=>`<button class="item" data-open="${p.id}"><b>${esc(p.name)}</b><span>${Object.keys(p.files).length} ไฟล์</span></button>`).join(''):
+  `<p class="empty">ยังไม่มีโปรเจค กด "โปรเจคใหม่" แล้วเพิ่มไฟล์ .py ของคุณ</p>`)+
+  `<div class="row"><button class="btn go" data-a="new">โปรเจคใหม่</button></div>`;
+}
+
+function proj(id){
+  cur=id;const p=P(),names=Object.keys(p.files);
+  if(!p.entry||!p.files[p.entry])p.entry=names.includes('main.py')?'main.py':(names[0]||'');
+  app.innerHTML=`<button class="btn ghost" data-a="home">กลับ</button><h1>${esc(p.name)}</h1>`+
+  (names.length?`<label class="mut" for="entry">ไฟล์เริ่มต้นที่จะรัน</label><select id="entry">${names.map(n=>`<option ${n===p.entry?'selected':''}>${esc(n)}</option>`).join('')}</select>
+  <ul>${names.map(n=>`<li><span>${esc(n)}</span><small>${(p.files[n].length/1024).toFixed(1)} KB</small><button class="x" data-del="${esc(n)}">ลบ</button></li>`).join('')}</ul>`:
+  `<p class="empty">ยังไม่มีไฟล์ กด "เพิ่มไฟล์ .py" แล้วเลือกไฟล์จากเครื่อง</p>`)+
+  `<input type="file" id="pick" multiple hidden>
+  <div class="row"><button class="btn go" data-a="run" ${names.length?'':'disabled'}>รัน</button><button class="btn ghost" data-a="add">เพิ่มไฟล์ .py</button><button class="btn ghost danger" data-a="rm">ลบโปรเจค</button></div>`;
+}
+
+/* ---------- จอเทอร์มินัล ---------- */
+let lines=[],tcur='',raf=0;
+function draw(){raf=0;const t=$('#term');if(!t)return;t.textContent=lines.join('\n')+(lines.length?'\n':'')+tcur;t.scrollTop=t.scrollHeight}
+function tw(s){
+  for(const p of s.replace(/\r\n/g,'\n').split(/(\x1b\[2J|\x1b\[H|\n|\r)/)){
+    if(p==='\n'){lines.push(tcur);tcur=''}
+    else if(p==='\r'){tcur=''}
+    else if(p==='\x1b[2J'){lines=[];tcur=''}
+    else if(p!=='\x1b[H')tcur+=p;
+  }
+  if(lines.length>600)lines=lines.slice(-500);
+  if(!raf)raf=requestAnimationFrame(draw);
+}
+const st=t=>{const e=$('#st');if(e)e.textContent=t};
+
+/* ---------- รับค่าจากผู้ใช้ (ใช้แทน input() ของ Python) ---------- */
+let waiting=null;
+window.askInput=()=>new Promise(res=>{waiting=res;const r=$('#inrow');r.hidden=false;const i=$('#line');i.value='';i.focus()});
+window.sleepMs=ms=>new Promise(r=>setTimeout(r,ms));
+function submit(){
+  if(!waiting)return;
+  const v=$('#line').value;$('#inrow').hidden=true;tw(v+'\n');
+  const r=waiting;waiting=null;r(v);
+}
+
+/* ---------- Pyodide ---------- */
+let pyP=null;
+function getPy(){
+  return pyP||(pyP=new Promise((ok,no)=>{
+    const s=document.createElement('script');s.src=PYURL+'pyodide.js';
+    s.onload=()=>loadPyodide({indexURL:PYURL}).then(ok,no);
+    s.onerror=()=>no(new Error('โหลด Python ไม่ได้ ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่'));
+    document.head.appendChild(s);
+  }).catch(e=>{pyP=null;throw e}));
+}
+
+/* ปรับให้โปรแกรมแบบเทอร์มินัลรันในหน้าเว็บได้: ล้างจอ, input(), sleep */
+const SHIM=`
+import os, sys, builtins, time
+def _sys(cmd):
+    if str(cmd).strip() in ("clear","cls"): sys.stdout.write("\\x1b[2J")
+    return 0
+os.system = _sys
+try:
+    from pyodide.ffi import run_sync, can_run_sync
+    import js
+    _ok = can_run_sync()
+except Exception:
+    _ok = False
+if _ok:
+    def _input(prompt=""):
+        sys.stdout.write(str(prompt)); sys.stdout.flush()
+        return run_sync(js.askInput())
+    builtins.input = _input
+    time.sleep = lambda s: run_sync(js.sleepMs(int(s*1000)))
+_ok
+`;
+
+async function run(){
+  const p=P();
+  app.innerHTML=`<div class="bar"><button class="btn ghost" data-a="back">กลับ</button><span id="st"></span></div><pre id="term"></pre>
+  <div id="inrow" hidden><input id="line" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"><button class="btn go" id="send">ส่ง</button></div>`;
+  lines=[];tcur='';running=true;
+  st('กำลังโหลด Python (ครั้งแรกอาจใช้เวลาสักครู่)...');
+  let py;
+  try{py=await getPy()}catch(e){tw(e.message+'\n');st('ผิดพลาด');running=false;return}
+  const dec=new TextDecoder(),wr=b=>{tw(dec.decode(b,{stream:true}));return b.length};
+  py.setStdout({write:wr});py.setStderr({write:wr});
+  py.runPython(`import os,sys,shutil
+shutil.rmtree('/proj',ignore_errors=True)
+os.makedirs('/proj')
+os.chdir('/proj')
+if '/proj' not in sys.path: sys.path.insert(0,'/proj')
+for k in [k for k,m in list(sys.modules.items()) if str(getattr(m,'__file__','') or '').startswith('/proj')]: del sys.modules[k]`);
+  for(const [n,c] of Object.entries(p.files))py.FS.writeFile('/proj/'+n,c);
+  const probe=document.createElement('span');probe.textContent='0'.repeat(40);$('#term').appendChild(probe);
+  const cw=probe.getBoundingClientRect().width/40;probe.remove();
+  const cols=Math.max(30,Math.floor(($('#term').clientWidth-24)/cw));
+  const sync=py.runPython(SHIM);
+  py.runPython(`os.environ['COLUMNS']='${cols}'`);
+  if(!sync){
+    tw('[หมายเหตุ] เบราว์เซอร์นี้ยังไม่รองรับโหมดเต็ม ช่องกรอกค่าจะเป็นกล่องข้อความ แนะนำให้อัปเดต Chrome\n');
+    py.setStdin({stdin:()=>{const v=prompt(lines.slice(-6).join('\n')+'\n'+tcur)||'';tw(v+'\n');return v}});
+  }
+  st('กำลังรัน '+p.entry);
+  try{
+    await py.runPythonAsync(`import runpy\nrunpy.run_path(${JSON.stringify('/proj/'+p.entry)}, run_name='__main__')`);
+    tw('\n[โปรแกรมจบการทำงาน]\n');
+  }catch(e){
+    const m=String(e.message||e);
+    tw(/SystemExit/.test(m.trim().split('\n').pop())?'\n[โปรแกรมจบการทำงาน]\n':'\n'+m+'\n');
+  }
+  running=false;st('จบแล้ว');$('#inrow').hidden=true;
+}
+
+/* ---------- เหตุการณ์ ---------- */
+app.addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;const d=b.dataset;
+  if(d.open)return proj(d.open);
+  if(d.del){if(confirm('ลบไฟล์ '+d.del+' ?')){delete P().files[d.del];save();proj(cur)}return}
+  if(b.id==='send')return submit();
+  switch(d.a){
+    case 'home':return home();
+    case 'new':{const n=(prompt('ชื่อโปรเจค')||'').trim();if(!n)return;const p={id:String(Date.now()),name:n,files:{},entry:''};db.push(p);save();return proj(p.id)}
+    case 'add':return $('#pick').click();
+    case 'run':return run();
+    case 'rm':if(confirm('ลบโปรเจคนี้ทั้งหมด?')){db=db.filter(x=>x.id!==cur);save();home()}return;
+    case 'back':return running?location.reload():proj(cur);
+  }
+});
+app.addEventListener('change',async e=>{
+  if(e.target.id==='pick'){const p=P();for(const f of e.target.files)p.files[f.name]=await f.text();save();proj(cur)}
+  if(e.target.id==='entry'){P().entry=e.target.value;save()}
+});
+app.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='line'){e.preventDefault();submit()}});
+
+home();
+if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
